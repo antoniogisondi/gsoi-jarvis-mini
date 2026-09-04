@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gsoi-jarvis-mini"
+version = "0.1.0"
+description = "GSOI Jarvis Mini — Car Agent locale, offline-first, per GSOI Automotive OS"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "GSOI Project" }]
+# La v0.1 usa solo la libreria standard (offline-first, basso consumo).
+dependencies = []
+
+[project.scripts]
+jarvis-mini = "jarvis_mini.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

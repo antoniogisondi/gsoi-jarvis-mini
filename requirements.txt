@@ -1,0 +1,8 @@
+# Runtime v0.1: nessuna dipendenza esterna (solo libreria standard Python).
+#
+# Dipendenze previste per fasi successive (NON ancora usate):
+#   httpx            # chiamate reali al server GSOI
+#   vosk             # STT offline
+#   piper-tts        # TTS offline
+#   llama-cpp-python # AI locale (modello quantizzato GGUF)
+#   python-can       # lettura OBD/CAN (sola lettura)

@@ -1,0 +1,16 @@
+[Unit]
+Description=GSOI Jarvis Mini (Car Agent)
+# Parte anche senza rete: Jarvis Mini deve funzionare offline.
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/jarvis-mini serve
+Restart=on-failure
+RestartSec=2
+# Log su journald (journalctl -u jarvis-mini).
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
