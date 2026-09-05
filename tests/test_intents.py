@@ -27,6 +27,26 @@ class TestIntentEngine(unittest.TestCase):
             with self.subTest(frase=frase):
                 self.assertEqual(self.engine.recognize(frase).intent, atteso)
 
+    def test_sinonimi_estesi(self):
+        # Modi di dire alternativi che devono comunque essere capiti.
+        casi = {
+            "alza l'audio": Intent.MEDIA_VOLUME_UP,
+            "più forte": Intent.MEDIA_VOLUME_UP,
+            "abbassa la musica": Intent.MEDIA_VOLUME_DOWN,
+            "più piano": Intent.MEDIA_VOLUME_DOWN,
+            "metti in pausa la musica": Intent.MEDIA_PAUSE,
+            "fai partire la musica": Intent.MEDIA_PLAY,
+            "apri il navigatore": Intent.NAV_OPEN,
+            "portami a casa": Intent.NAV_OPEN,
+            "vai alla home": Intent.NAV_HOME,
+            "numero di giri": Intent.VEHICLE_RPM,
+            "quanti volt ha la batteria": Intent.VEHICLE_BATTERY,
+            "connetti il telefono": Intent.BLUETOOTH_OPEN,
+        }
+        for frase, atteso in casi.items():
+            with self.subTest(frase=frase):
+                self.assertEqual(self.engine.recognize(frase).intent, atteso)
+
     def test_richiesta_non_riconosciuta(self):
         match = self.engine.recognize(
             "Analizza i dati OBD degli ultimi trenta minuti"
