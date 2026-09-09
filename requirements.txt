@@ -1,8 +1,17 @@
-# Runtime v0.1: nessuna dipendenza esterna (solo libreria standard Python).
+# Runtime base v0.1: nessuna dipendenza esterna (solo libreria standard).
 #
-# Dipendenze previste per fasi successive (NON ancora usate):
-#   httpx            # chiamate reali al server GSOI
-#   vosk             # STT offline
-#   piper-tts        # TTS offline
-#   llama-cpp-python # AI locale (modello quantizzato GGUF)
-#   python-can       # lettura OBD/CAN (sola lettura)
+# Voce/biometria REALI (opzionali): installali + imposta le env per attivarli
+# al posto dei mock. Senza, l'app resta pienamente funzionante in mock.
+#
+#   # TTS (voce)         -> JARVIS_TTS=piper JARVIS_PIPER_MODEL=/path/voce.onnx
+#   piper-tts
+#   # STT (voce->testo)  -> JARVIS_STT=vosk JARVIS_VOSK_MODEL=/path/vosk-it
+#   vosk
+#   sounddevice
+#   # Wake word          -> JARVIS_WAKEWORD=oww JARVIS_OWW_MODEL=/path/hey_gsoi.onnx
+#   openwakeword
+#   numpy
+#   # Speaker ID (sei tu)-> JARVIS_SPEAKER=resemblyzer ; enroll con: jarvis-mini enroll Ana *.wav
+#   resemblyzer
+#
+# Loop vocale nel servizio: JARVIS_VOICE=1
