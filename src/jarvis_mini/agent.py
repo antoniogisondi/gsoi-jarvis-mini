@@ -16,6 +16,7 @@ from .intents.models import Result
 from .remote.client import RemoteClient
 from .router.router import Router
 from .tools.registry import build_default_registry
+from .voice.tts import make_tts
 
 
 class JarvisMini:
@@ -27,6 +28,7 @@ class JarvisMini:
         self.mode_manager = ModeManager(self.config)
         self.remote = RemoteClient(self.config)
         self.local_ai = LocalAI()
+        self.tts = make_tts()
 
         self.router = Router(
             self.engine,
@@ -35,6 +37,10 @@ class JarvisMini:
             self.remote,
             self.local_ai,
         )
+
+    def say(self, text: str) -> None:
+        """Pronuncia un testo via TTS (mock nella v0.1)."""
+        self.tts.say(text)
 
     def handle(self, text: str) -> Result:
         return self.router.handle(text)

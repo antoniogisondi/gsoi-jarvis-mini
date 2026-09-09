@@ -37,22 +37,55 @@ def _run_cli(agent: JarvisMini) -> None:
 
         result = agent.handle(text)
         print(f"[{result.source.value}] {result.text}\n")
+        # Jarvis "parla" la risposta (TTS mock nella v0.1).
+        agent.say(result.text)
 
 
 def _run_serve(agent: JarvisMini) -> None:
-    # Espone lo stato al cockpit via HTTP locale (thread in background).
     import threading
     from .api.server import run_state_server, DEFAULT_HOST, DEFAULT_PORT
+    from .telemetry import snapshot
+    from .proactive.engine import ProactiveEngine
 
-    api_thread = threading.Thread(
-        target=run_state_server, args=(agent,), daemon=True
-    )
-    api_thread.start()
+    engine = ProactiveEngine()
+    shared = {"latest": snapshot(agent.mode().value)}
 
-    # In futuro: qui parte anche il loop wake word / STT / TTS (Fase 5).
+    def tick_loop():
+        active_ids = set()
+        while True:
+            snap = snapshot(agent.mode().value)
+            suggestions = engine.evaluate(snap)
+
+            sug_list = []
+            new_ids = set()
+            for s in suggestions:
+                sug_list.append({"id": s.id, "text": s.text, "severity": s.severity})
+                new_ids.add(s.id)
+                # Pronuncia solo i suggerimenti NUOVI (una volta).
+                if s.id not in active_ids:
+                    agent.say(s.text)
+            active_ids = new_ids
+
+            snap["agent"] = {
+                "listening": True,
+                "message": sug_list[0]["text"] if sug_list else "Tutto tranquillo. Buona guida.",
+                "suggestions": sug_list,
+            }
+            shared["latest"] = snap
+            time.sleep(3)
+
+    threading.Thread(target=tick_loop, daemon=True).start()
+
+    threading.Thread(
+        target=run_state_server,
+        args=(lambda: shared["latest"],),
+        daemon=True,
+    ).start()
+
+    # In futuro: qui parte anche il loop wake word / STT (Fase 5).
     print(f"GSOI Jarvis Mini pronto (servizio). Modalita': {agent.mode().value}")
     print(f"API stato: http://{DEFAULT_HOST}:{DEFAULT_PORT}/state")
-    print("In attesa di comandi. Premi Ctrl+C per uscire.")
+    print("Motore proattivo attivo. Premi Ctrl+C per uscire.")
     try:
         while True:
             time.sleep(3600)

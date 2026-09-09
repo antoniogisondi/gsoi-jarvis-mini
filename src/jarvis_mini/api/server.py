@@ -1,26 +1,24 @@
 """Server HTTP locale che espone lo stato di Jarvis Mini al cockpit.
 
 Endpoint:
-    GET /state  ->  JSON con modalita' + telemetria veicolo + media.
+    GET /state  ->  JSON con modalita' + telemetria + media + agent.
 
-Solo libreria standard (offline-first, nessuna dipendenza). Ascolta su
-localhost: e' un canale IPC tra Jarvis Mini e il cockpit sullo stesso
-dispositivo, non un servizio esposto in rete.
+Serve lo snapshot piu' recente prodotto dal loop di servizio (telemetria +
+proattivita'), passato tramite `state_getter`. Solo libreria standard; ascolta
+su localhost (IPC locale col cockpit, non un servizio esposto in rete).
 """
 
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .. import telemetry
-
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8090
 
 
-def _make_handler(mode_getter):
+def _make_handler(state_getter):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
-            pass  # silenzioso
+            pass
 
         def do_GET(self):
             if self.path.rstrip("/") != "/state":
@@ -29,11 +27,11 @@ def _make_handler(mode_getter):
                 return
 
             try:
-                mode = mode_getter()
+                state = state_getter()
             except Exception:
-                mode = "offline"
+                state = {}
 
-            body = json.dumps(telemetry.snapshot(mode)).encode("utf-8")
+            body = json.dumps(state).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -44,11 +42,7 @@ def _make_handler(mode_getter):
     return Handler
 
 
-def run_state_server(agent, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
-    """Avvia (bloccante) il server di stato. `agent` espone .mode()."""
-
-    def mode_getter():
-        return agent.mode().value
-
-    server = ThreadingHTTPServer((host, port), _make_handler(mode_getter))
+def run_state_server(state_getter, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
+    """Avvia (bloccante) il server. `state_getter()` restituisce il dict di stato."""
+    server = ThreadingHTTPServer((host, port), _make_handler(state_getter))
     server.serve_forever()
