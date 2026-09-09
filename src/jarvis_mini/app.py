@@ -40,8 +40,18 @@ def _run_cli(agent: JarvisMini) -> None:
 
 
 def _run_serve(agent: JarvisMini) -> None:
-    # In futuro: qui parte il loop wake word / STT / TTS (Fase 5).
+    # Espone lo stato al cockpit via HTTP locale (thread in background).
+    import threading
+    from .api.server import run_state_server, DEFAULT_HOST, DEFAULT_PORT
+
+    api_thread = threading.Thread(
+        target=run_state_server, args=(agent,), daemon=True
+    )
+    api_thread.start()
+
+    # In futuro: qui parte anche il loop wake word / STT / TTS (Fase 5).
     print(f"GSOI Jarvis Mini pronto (servizio). Modalita': {agent.mode().value}")
+    print(f"API stato: http://{DEFAULT_HOST}:{DEFAULT_PORT}/state")
     print("In attesa di comandi. Premi Ctrl+C per uscire.")
     try:
         while True:
