@@ -1,0 +1,14 @@
+# Dipendenze del FINE-TUNING (girano su Colab/workstation con GPU NVIDIA).
+# NON c'entrano col runtime dell'auto: Jarvis Mini a bordo resta zero-dipendenze.
+#
+# Su Colab Unsloth è spesso già presente; in locale:
+#   pip install -r requirements.txt
+#
+# unsloth installa/tira transformers, trl, peft, bitsandbytes, torch, datasets.
+unsloth
+trl
+transformers
+datasets
+peft
+bitsandbytes
+pyyaml

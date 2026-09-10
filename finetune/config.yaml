@@ -1,0 +1,67 @@
+# =============================================================================
+# GSOI — configurazione del fine-tuning QLoRA di Qwen3-4B con Unsloth
+# =============================================================================
+# Questo è l'UNICO file che devi modificare per un normale addestramento.
+# Lo script:   python train.py --config config.yaml
+#
+# Valori di default già sensati per QLoRA 4-bit su una GPU modesta
+# (Colab T4 16 GB o una GPU locale da 8–12 GB). Modifica ciò che ti serve.
+# =============================================================================
+
+model:
+  # Modello base. La variante Unsloth è già ottimizzata per il 4-bit.
+  # Model-agnostic: per provare Minerva metti "sapienzanlp/Minerva-7B-instruct-v1.0"
+  # (occhio alla VRAM: un 7B chiede più memoria).
+  name: "unsloth/Qwen3-4B-Instruct-2507"
+  max_seq_length: 2048        # lunghezza max sequenza (token). 2048 basta per dialoghi brevi.
+  load_in_4bit: true          # true = QLoRA (base quantizzata a 4-bit). false = LoRA 16-bit.
+
+lora:
+  # Adapter LoRA: si addestrano SOLO queste matrici, il resto resta congelato.
+  r: 16                       # rango: più alto = più capacità (e più VRAM). 8–32 tipico.
+  alpha: 16                   # scala LoRA. Regola comune: alpha ≈ r.
+  dropout: 0.0                # 0.0 è ottimizzato in Unsloth; 0.05–0.1 se overfitti.
+  bias: "none"
+  # Moduli su cui applicare LoRA: attention (q,k,v,o) + MLP (gate,up,down).
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+dataset:
+  # File JSONL: una riga = {"messages": [{"role": "...", "content": "..."}]}
+  path: "data/gsoi_dataset.jsonl"
+  # System prompt iniettato in ogni esempio privo di messaggio "system".
+  # DEVE restare allineato a SYSTEM_PROMPT in src/jarvis_mini/ai/model_client.py,
+  # così l'addestramento combacia con l'inferenza in auto.
+  system_prompt: >-
+    Sei GSOI, l'assistente di bordo dell'automobile. Rispondi sempre in
+    italiano, in modo breve e chiaro: le tue risposte vengono lette ad alta
+    voce mentre l'utente guida. Non inventare azioni sul veicolo e non
+    dichiarare di aver eseguito comandi (volume, navigazione, telefono):
+    quei comandi li esegue l'agente, non tu. I dati di bordo (OBD/CAN) sono
+    in sola lettura. Se non conosci una risposta, dillo con sincerità.
+
+train:
+  epochs: 3                   # 2–4 tipico per un dataset piccolo. Troppi = overfit.
+  batch_size: 2               # per-device. Alzalo se hai VRAM libera.
+  grad_accum: 4               # batch effettivo = batch_size * grad_accum = 8.
+  learning_rate: 2.0e-4       # 1e-4 – 2e-4 tipico per (Q)LoRA.
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  lr_scheduler: "linear"
+  optimizer: "adamw_8bit"     # 8-bit = meno VRAM.
+  seed: 3407
+  logging_steps: 1
+  output_dir: "outputs"       # qui finiscono adapter + checkpoint.
+
+export:
+  gguf: true                  # esporta il .gguf pronto per gsoi-model / llama.cpp / Ollama.
+  quantization: "q4_k_m"      # q4_k_m = ottimo compromesso qualità/dimensione in auto.
+  out_dir: "gguf"             # cartella di output del .gguf.
+  save_lora: true             # salva anche i soli adapter LoRA (leggeri, riusabili).
+  save_merged_16bit: false    # merge completo 16-bit (grande): serve solo per altri usi.

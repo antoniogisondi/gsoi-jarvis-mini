@@ -1,0 +1,7 @@
+# Output del training: pesanti, non vanno versionati.
+outputs/
+gguf/
+*.gguf
+*.bin
+*.safetensors
+__pycache__/
