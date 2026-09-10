@@ -32,6 +32,14 @@ Copri almeno tre famiglie di esempi:
 2. **dati di bordo** → non inventare numeri, rimanda ai sensori/tool;
 3. **sicurezza** → rifiuta azioni su freni/sterzo/ABS/airbag/centralina (sola lettura).
 
+## Requisiti
+
+- **Python 3.10–3.12** (consigliato 3.11). Su 3.13/3.14 `datasets`/`dill` non
+  serializzano ancora i dataset e il training fallisce: `train.py` te lo dice
+  subito. Se il tuo sistema ha solo un Python più nuovo, usa `uv venv --python
+  3.11` o conda.
+- GPU NVIDIA (locale) **oppure** Google Colab (T4 gratis).
+
 ## Come si esegue
 
 ### Su Colab (consigliato, GPU T4 gratis)

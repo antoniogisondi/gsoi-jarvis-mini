@@ -16,7 +16,20 @@ Qwen3: questo script ne segue la struttura, guidato da config.yaml.
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+# L'ecosistema unsloth/torch/datasets supporta Python 3.10–3.12. Su 3.13+
+# 'dill' non riesce a serializzare i Dataset (pickle cambiato) e il training
+# muore con un traceback criptico: meglio avvisare subito e chiaro.
+if sys.version_info[:2] < (3, 10) or sys.version_info[:2] >= (3, 13):
+    sys.exit(
+        f"[GSOI] Serve Python 3.10–3.12 (rilevato {sys.version_info.major}."
+        f"{sys.version_info.minor}). Ricrea il venv, es.:\n"
+        "  rm -rf .venv && python3.11 -m venv .venv && source .venv/bin/activate\n"
+        "  pip install -r requirements.txt\n"
+        "  (oppure:  uv venv --python 3.11 .venv)"
+    )
 
 import yaml
 
