@@ -91,6 +91,10 @@ def _run_serve(agent: JarvisMini) -> None:
         print("Loop vocale attivo.")
 
     print(f"GSOI Jarvis Mini pronto (servizio). Modalita': {agent.mode().value}")
+    if agent.config.ai_backend == "local":
+        print(f"Cervello locale: modello LLM su {agent.config.model_url}")
+    else:
+        print("Cervello locale: mock (JARVIS_AI=local per il modello reale)")
     print(f"API stato: http://{DEFAULT_HOST}:{DEFAULT_PORT}/state")
     print("Motore proattivo attivo. Premi Ctrl+C per uscire.")
     try:

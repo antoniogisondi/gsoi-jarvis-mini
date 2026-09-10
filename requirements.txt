@@ -1,5 +1,12 @@
 # Runtime base v0.1: nessuna dipendenza esterna (solo libreria standard).
 #
+# Cervello locale (LLM a bordo): il client usa solo urllib (stdlib), quindi
+# NON serve alcun pacchetto Python. Il modello gira come servizio SEPARATO,
+# non come dipendenza di Jarvis Mini:
+#   - server OpenAI-compatible (llama.cpp server / Ollama / TensorRT-LLM)
+#   - modello Qwen3-4B-Instruct (GGUF o TensorRT), in ascolto su 127.0.0.1
+#   - attivazione lato agente:  JARVIS_AI=local
+#
 # Voce/biometria REALI (opzionali): installali + imposta le env per attivarli
 # al posto dei mock. Senza, l'app resta pienamente funzionante in mock.
 #

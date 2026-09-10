@@ -8,7 +8,7 @@ test sia dalla modalita' servizio (systemd).
 
 from typing import Optional
 
-from .ai.local import LocalAI
+from .ai.base import make_local_ai
 from .config import Config
 from .connectivity.mode_manager import Mode, ModeManager
 from .intents.engine import IntentEngine
@@ -27,7 +27,8 @@ class JarvisMini:
         self.registry = build_default_registry()
         self.mode_manager = ModeManager(self.config)
         self.remote = RemoteClient(self.config)
-        self.local_ai = LocalAI()
+        # Cervello a bordo: mock di default, LLM locale con JARVIS_AI=local.
+        self.local_ai = make_local_ai(self.config)
         self.tts = make_tts()
 
         self.router = Router(

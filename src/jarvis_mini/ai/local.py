@@ -1,22 +1,14 @@
-"""AI locale di fallback (STUB per la v0.1).
+"""Compatibilita': il cervello locale e' stato scomposto in piu' moduli.
 
-Gestisce le richieste non riconosciute dagli intent quando il server non
-e' raggiungibile. In una fase successiva qui verra' collegato un piccolo
-modello locale quantizzato (es. GGUF via llama.cpp), leggero e adatto al
-Raspberry Pi 5.
+  * base.py         -> interfaccia LocalAI + factory make_local_ai
+  * mock.py         -> MockLocalAI (nessun modello, sviluppo)
+  * model_client.py -> LocalModelClient (Qwen3-4B via localhost)
+
+Questo modulo resta come punto di import stabile.
 """
 
-from ..intents.models import Result, Source
+from .base import LocalAI, make_local_ai
+from .mock import MockLocalAI
+from .model_client import LocalModelClient
 
-
-class LocalAI:
-    def ask(self, text: str) -> Result:
-        return Result(
-            text=(
-                "[stub AI locale] Non ho un comando locale per questa "
-                "richiesta e il server GSOI non e' raggiungibile."
-            ),
-            success=False,
-            source=Source.LOCAL_AI,
-            data={"query": text},
-        )
+__all__ = ["LocalAI", "MockLocalAI", "LocalModelClient", "make_local_ai"]
