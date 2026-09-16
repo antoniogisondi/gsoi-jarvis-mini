@@ -34,7 +34,7 @@ lora:
 
 dataset:
   # File JSONL: una riga = {"messages": [{"role": "...", "content": "..."}]}
-  path: "data/gsoi_dataset.jsonl"
+  path: "data/gsoi_dataset_v3.jsonl"
   # System prompt iniettato in ogni esempio privo di messaggio "system".
   # DEVE restare allineato a SYSTEM_PROMPT in src/jarvis_mini/ai/model_client.py,
   # così l'addestramento combacia con l'inferenza in auto.
