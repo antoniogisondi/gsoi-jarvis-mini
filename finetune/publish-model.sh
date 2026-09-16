@@ -23,6 +23,18 @@ DOWNLOAD_NAME="gsoi-qwen3-4b-q4_k_m.gguf"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Usa il venv del finetune se presente, così 'hf' e huggingface_hub ci sono
+# anche se non hai fatto 'source .venv/bin/activate'.
+if [ -d "$SCRIPT_DIR/.venv/bin" ]; then
+    export PATH="$SCRIPT_DIR/.venv/bin:$PATH"
+fi
+
+if ! command -v hf >/dev/null 2>&1; then
+    echo "ERRORE: 'hf' non trovato. Attiva il venv del finetune o installa" >&2
+    echo "        huggingface_hub:  uv pip install huggingface_hub" >&2
+    exit 1
+fi
+
 # --- Individua il file GGUF -------------------------------------------------
 GGUF="${1:-}"
 if [ -z "$GGUF" ]; then
