@@ -9,7 +9,7 @@ class Intent(str, Enum):
     """Intenti locali riconosciuti da Jarvis Mini.
 
     UNKNOWN indica che nessun intent locale corrisponde: la richiesta e'
-    quindi un candidato per l'AI locale o per il server GSOI.
+    quindi gestita dal cervello locale (LLM a bordo).
     """
 
     MEDIA_VOLUME_UP = "MEDIA_VOLUME_UP"
@@ -28,9 +28,8 @@ class Intent(str, Enum):
 class Source(str, Enum):
     """Da dove proviene la risposta a una richiesta."""
 
-    LOCAL_TOOL = "local_tool"   # eseguita da un tool locale
-    REMOTE = "remote"           # inoltrata al server GSOI
-    LOCAL_AI = "local_ai"       # gestita dall'AI locale (fallback)
+    LOCAL_TOOL = "local_tool"   # eseguita da un tool locale (deterministico)
+    LOCAL_AI = "local_ai"       # gestita dal cervello locale (LLM a bordo)
 
 
 @dataclass

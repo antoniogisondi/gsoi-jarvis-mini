@@ -6,9 +6,9 @@ come servizio systemd. Deve funzionare anche completamente **offline**.
 
 Il **cervello** dell'agente gira **a bordo**: un LLM locale (Qwen3-4B-Instruct)
 servito come processo separato su `localhost`, interrogato senza rete — nessun
-round-trip client-server, latenza minima. Il server GSOI (`gsoi-jarvis` /
-`gsoi-llm`) resta un **fallback opzionale**, usato solo se il modello locale
-non è disponibile.
+round-trip di rete, latenza minima. **Non esiste un modello sul server**: l'auto
+pensa da sola. La connettività Internet, quando c'è, serve solo alle funzioni
+che la richiedono (traffico, meteo, OTA), non a elaborare le richieste.
 
 > Jarvis Mini **è** il Car Agent: non esiste un progetto separato `car-agent`.
 
@@ -33,16 +33,14 @@ Per questo il pacchetto espone un eseguibile `jarvis-mini` con due modalità:
 richiesta utente
 └─ router
    ├─ comando semplice? (intent locale + tool)  → tool locale (deterministico)
-   └─ altrimenti → cervello LOCALE (LLM Qwen3-4B su localhost)
-      ├─ ha risposto?          → risposta locale        (nessuna rete)
-      └─ modello non attivo?   → server GSOI disponibile?
-                                 ├─ sì → inoltro a gsoi-jarvis/gsoi-llm (fallback)
-                                 └─ no → esito locale
+   └─ altrimenti                                → cervello LOCALE (LLM su localhost)
 ```
 
-Con il modello in esecuzione a bordo la richiesta **non esce mai** dalla
-macchina. I comandi semplici restano sempre **deterministici** e locali: non è
-sicuro far passare "alza il volume" o un comando veicolo attraverso un LLM.
+La richiesta **non esce mai** dalla macchina: nessun modello sul server, nessun
+round-trip di rete. I comandi semplici restano sempre **deterministici** e
+locali: non è sicuro far passare "alza il volume" o un comando veicolo
+attraverso un LLM. La connettività riguarda solo le funzioni online, non il
+cervello.
 
 Moduli (`src/jarvis_mini/`):
 
@@ -50,9 +48,8 @@ Moduli (`src/jarvis_mini/`):
 | --------------- | ---------------------------------------------------------------- |
 | `intents/`      | riconoscimento intenti offline (parole chiave, niente LLM)       |
 | `tools/`        | tool locali dell'auto (audio, media, navigazione, veicolo, BT)   |
-| `connectivity/` | rilevamento Internet, salute server GSOI, gestore modalità       |
-| `router/`       | instradamento richieste (tool locale / cervello locale / server) |
-| `remote/`       | client verso `gsoi-jarvis` — fallback opzionale (**stub**)       |
+| `connectivity/` | rilevamento Internet, modalità online/offline (per funzioni online) |
+| `router/`       | instradamento richieste (tool locale / cervello locale)          |
 | `ai/`           | cervello locale: `mock` + client LLM `local` (Qwen3-4B)          |
 | `agent.py`      | assembla tutto dietro `handle(testo) -> Result`                  |
 | `app.py`        | CLI / servizio                                                   |
@@ -90,6 +87,10 @@ Tu > :status
 Modalita': offline
 ```
 
+`Modalita'` indica solo lo **stato della rete** (`offline` = niente Internet,
+`connected` = Internet disponibile per le funzioni online). Il cervello locale
+funziona in entrambi i casi.
+
 Modalità servizio (come farà systemd nell'OS):
 
 ```bash
@@ -100,8 +101,7 @@ jarvis-mini serve
 
 | Variabile              | Default                      | Descrizione                                   |
 | ---------------------- | ---------------------------- | --------------------------------------------- |
-| `GSOI_SERVER_URL`      | `http://localhost:8080`      | endpoint del server GSOI (fallback opzionale) |
-| `JARVIS_FORCE_OFFLINE` | `0`                          | `1` forza la modalità offline                 |
+| `JARVIS_FORCE_OFFLINE` | `0`                          | `1` forza lo stato rete a offline (test)      |
 | `JARVIS_AI`            | `mock`                       | cervello locale: `mock` o `local` (LLM)       |
 | `JARVIS_MODEL_URL`     | `http://127.0.0.1:8091/v1`   | endpoint OpenAI-compatible del modello        |
 | `JARVIS_MODEL_NAME`    | `qwen3-4b-instruct`          | nome del modello richiesto al server locale   |
@@ -137,5 +137,5 @@ locali (mock) e CLI. Fasi successive, con interfacce già predisposte:
 - ✅ cervello locale — client LLM `local` verso Qwen3-4B su localhost (Fase 6);
   resta da fine-tunare il modello (LoRA/QLoRA) e servirlo sul Jetson
 - audio, Bluetooth, GPS, OBD reali (Fasi 7–9)
-- client reale verso `gsoi-jarvis` (Fase 11)
+- funzioni online (traffico, meteo) e OTA quando c'è rete (Fase 11)
 - ricetta Yocto `jarvis-mini_git.bb` in `meta-gsoi` per l'integrazione nell'OS

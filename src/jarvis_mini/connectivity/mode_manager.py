@@ -1,23 +1,26 @@
-"""Gestore della modalita' operativa: OFFLINE vs CONNECTED.
+"""Modalita' di connettivita': OFFLINE vs CONNECTED (solo Internet).
 
-Combina il controllo Internet e la salute del server GSOI per decidere
-se le richieste complesse possono essere inoltrate al server oppure
-devono restare interamente locali (fallback automatico).
+Il cervello e' sempre locale, quindi questa modalita' NON decide dove
+elaborare le richieste: indica solo se c'e' Internet, per abilitare le
+funzioni che lo richiedono (traffico, meteo, OTA). Senza rete l'auto
+funziona comunque, col modello a bordo.
 
-I controlli sono iniettabili (dependency injection) per rendere il
-comportamento facilmente testabile senza rete reale.
+  * OFFLINE   -> nessuna connessione Internet
+  * CONNECTED -> Internet disponibile (funzioni online abilitate)
+
+Il controllo e' iniettabile (dependency injection) per i test senza rete.
 """
 
 from enum import Enum
 from typing import Callable, Optional
 
 from ..config import Config
-from . import network, server_health
+from . import network
 
 
 class Mode(str, Enum):
-    OFFLINE = "offline"      # server GSOI non raggiungibile: tutto locale
-    CONNECTED = "connected"  # server GSOI raggiungibile: capacita' extra
+    OFFLINE = "offline"      # nessuna connessione Internet
+    CONNECTED = "connected"  # Internet disponibile (funzioni online)
 
 
 class ModeManager:
@@ -25,11 +28,9 @@ class ModeManager:
         self,
         config: Config,
         internet_check: Optional[Callable[[], bool]] = None,
-        server_check: Optional[Callable[[], bool]] = None,
     ):
         self.config = config
         self._internet_check = internet_check or self._default_internet_check
-        self._server_check = server_check or self._default_server_check
 
     def _default_internet_check(self) -> bool:
         return network.has_internet(
@@ -38,23 +39,10 @@ class ModeManager:
             self.config.net_timeout,
         )
 
-    def _default_server_check(self) -> bool:
-        return server_health.is_server_reachable(
-            self.config.health_url,
-            self.config.server_timeout,
-        )
-
     def has_internet(self) -> bool:
         if self.config.force_offline:
             return False
         return self._internet_check()
 
-    def is_server_available(self) -> bool:
-        if self.config.force_offline:
-            return False
-        if not self.has_internet():
-            return False
-        return self._server_check()
-
     def current_mode(self) -> Mode:
-        return Mode.CONNECTED if self.is_server_available() else Mode.OFFLINE
+        return Mode.CONNECTED if self.has_internet() else Mode.OFFLINE
