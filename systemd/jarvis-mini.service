@@ -2,9 +2,18 @@
 Description=GSOI Jarvis Mini (Car Agent)
 # Parte anche senza rete: Jarvis Mini deve funzionare offline.
 After=network.target
+# Le capacita' hardware (microfono, CAN, ...) sono rilevate da gsoi-detect al
+# boot: attendiamole cosi' che l'assistente vocale si attivi solo dove c'e' un
+# microfono reale (GSOI_MIC=1). L'ordinamento e' best-effort: se gsoi-detect
+# non c'e', Jarvis parte comunque (l'EnvironmentFile e' opzionale, "-").
+After=gsoi-detect.service
+Wants=gsoi-detect.service
 
 [Service]
 Type=simple
+# Capacita' rilevate da gsoi-detect (GSOI_MIC, GSOI_CAN, ...). Opzionale: il
+# "-" evita che l'assenza del file impedisca l'avvio del servizio.
+EnvironmentFile=-/run/gsoi/capabilities.env
 ExecStart=/usr/bin/jarvis-mini serve
 Restart=on-failure
 RestartSec=2

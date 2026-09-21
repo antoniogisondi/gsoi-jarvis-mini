@@ -51,6 +51,9 @@ Moduli (`src/jarvis_mini/`):
 | `connectivity/` | rilevamento Internet, modalità online/offline (per funzioni online) |
 | `router/`       | instradamento richieste (tool locale / cervello locale)          |
 | `ai/`           | cervello locale: `mock` + client LLM `local` (Qwen3-4B)          |
+| `proactive/`    | motore proattivo: suggerimenti dell'agente (esposti in `/state`) |
+| `voice/`        | assistente vocale: wake word, STT, TTS, speaker ID, `VoiceSession` |
+| `api/`          | server HTTP locale per il cockpit: `GET /state`, `POST /ask`     |
 | `agent.py`      | assembla tutto dietro `handle(testo) -> Result`                  |
 | `app.py`        | CLI / servizio                                                   |
 
@@ -105,6 +108,10 @@ jarvis-mini serve
 | `JARVIS_AI`            | `mock`                       | cervello locale: `mock` o `local` (LLM)       |
 | `JARVIS_MODEL_URL`     | `http://127.0.0.1:8091/v1`   | endpoint OpenAI-compatible del modello        |
 | `JARVIS_MODEL_NAME`    | `qwen3-4b-instruct`          | nome del modello richiesto al server locale   |
+| `JARVIS_VOICE`         | *(auto)*                     | `1` forza il loop microfono, `0` lo disattiva; assente = automatico da `GSOI_MIC` |
+| `JARVIS_WAKEWORD`      | *(mock)*                     | `oww` per openWakeWord (+ `JARVIS_OWW_MODEL`) |
+| `JARVIS_STT`           | *(mock)*                     | `vosk` per STT reale (+ `JARVIS_VOSK_MODEL`)  |
+| `JARVIS_TTS`           | *(mock)*                     | `piper` per TTS reale (+ `JARVIS_PIPER_MODEL`) |
 
 ### Cervello locale (LLM a bordo)
 
@@ -122,6 +129,45 @@ Il client usa **solo la libreria standard** (`urllib`): nessuna dipendenza
 aggiuntiva. È **model-agnostic** — per usare un altro modello (es. Minerva)
 basta servire un GGUF diverso, senza toccare il codice.
 
+## Assistente vocale
+
+L'assistente vocale è **offline** e segue la pipeline:
+
+```
+wake word ("Hey GSOI")  →  STT (voce→testo)  →  cervello locale  →  TTS (testo→voce)
+```
+
+Le interfacce (`voice/`) hanno **implementazioni mock** (default, nessun
+modello) e reali innestabili senza toccare il resto: **openWakeWord**, **Vosk**
+(STT), **Piper** (TTS), **Resemblyzer** (riconoscimento del parlante). Il cuore
+è la **`VoiceSession`**: un unico punto d'ingresso `ask(testo)` che elabora col
+cervello, pronuncia la risposta e pubblica lo **stato del dialogo** (fase
+`idle`/`listening`/`thinking`/`speaking` + ultime battute).
+
+Lo stesso `ask()` è raggiungibile in **due modi**, così l'assistente funziona
+identico con o senza microfono:
+
+- **loop microfono** — si attiva **solo se c'è davvero un microfono**
+  (`GSOI_MIC=1`, rilevato da `gsoi-detect` nell'OS) ed è configurato un motore
+  STT reale; `JARVIS_VOICE=1`/`0` forza/disattiva a mano.
+- **ponte a testo** — `POST /ask` sul server locale, **sempre attivo**. È così
+  che il cockpit "parla" con l'assistente (e come si prova in QEMU senza audio):
+
+  ```bash
+  curl -s localhost:8090/ask -H 'Content-Type: application/json' \
+       -d '{"text": "che temperatura ha il motore?"}'
+  # -> {"reply": "...", "success": true, "source": "local_tool"}
+  ```
+
+  Il dialogo dal vivo compare in `GET /state` sotto `agent.conversation`, e il
+  cockpit lo mostra nella schermata AI.
+
+Registrazione del profilo vocale (per il riconoscimento del parlante):
+
+```bash
+jarvis-mini enroll Ana campione1.wav campione2.wav
+```
+
 ## Test
 
 ```bash
@@ -133,7 +179,9 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 La v0.1 copre il **cuore offline**: intent engine, router, connectivity, tool
 locali (mock) e CLI. Fasi successive, con interfacce già predisposte:
 
-- STT / TTS / wake word offline (Fase 5)
+- ✅ assistente vocale (Fase 5): pipeline wake word → STT → cervello → TTS con
+  `VoiceSession`, ponte `POST /ask` e stato del dialogo in `/state`; restano da
+  innestare i motori reali (openWakeWord / Vosk / Piper) e il microfono
 - ✅ cervello locale — client LLM `local` verso Qwen3-4B su localhost (Fase 6);
   resta da fine-tunare il modello (LoRA/QLoRA) e servirlo sul Jetson
 - audio, Bluetooth, GPS, OBD reali (Fasi 7–9)

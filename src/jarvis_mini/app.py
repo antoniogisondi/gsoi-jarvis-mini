@@ -42,13 +42,37 @@ def _run_cli(agent: JarvisMini) -> None:
         agent.say(result.text)
 
 
+def _voice_should_listen() -> bool:
+    """Decide se avviare il loop microfono (wake word -> STT).
+
+    Regola coerente con l'auto-rilevamento hardware di GSOI: il microfono si
+    ascolta solo se c'e' davvero (GSOI_MIC=1, scritto da gsoi-detect) ED e'
+    configurato un motore STT reale — altrimenti l'MockSTT girerebbe a vuoto
+    in un servizio senza stdin. Override espliciti: JARVIS_VOICE=1 forza
+    l'ascolto (utile in sviluppo), JARVIS_VOICE=0 lo disattiva sempre.
+
+    Nota: l'endpoint POST /ask (ponte a testo) resta comunque sempre attivo,
+    quindi l'assistente e' raggiungibile anche senza microfono.
+    """
+    v = os.environ.get("JARVIS_VOICE")
+    if v == "0":
+        return False
+    if v == "1":
+        return True
+    return os.environ.get("GSOI_MIC") == "1" and bool(os.environ.get("JARVIS_STT"))
+
+
 def _run_serve(agent: JarvisMini) -> None:
     import threading
     from .api.server import run_state_server, DEFAULT_HOST, DEFAULT_PORT
     from .telemetry import snapshot
     from .proactive.engine import ProactiveEngine
+    from .voice.session import VoiceSession
 
     engine = ProactiveEngine()
+    # Sessione di conversazione condivisa: unico punto d'ingresso dell'assistente
+    # (loop microfono e POST /ask) e unica fonte dello stato del dialogo.
+    session = VoiceSession(agent)
     shared = {"latest": snapshot(agent.mode().value)}
 
     def tick_loop():
@@ -71,6 +95,8 @@ def _run_serve(agent: JarvisMini) -> None:
                 "listening": True,
                 "message": sug_list[0]["text"] if sug_list else "Tutto tranquillo. Buona guida.",
                 "suggestions": sug_list,
+                # Dialogo dal vivo dell'assistente vocale (fase + ultime battute).
+                "conversation": session.to_dict(),
             }
             shared["latest"] = snap
             time.sleep(3)
@@ -80,15 +106,20 @@ def _run_serve(agent: JarvisMini) -> None:
     threading.Thread(
         target=run_state_server,
         args=(lambda: shared["latest"],),
+        kwargs={"ask_handler": session.ask},
         daemon=True,
     ).start()
 
-    # Loop vocale (wake word -> STT -> agente -> TTS): attivo solo se richiesto
-    # (richiede microfono + modelli). Di default resta spento.
-    if os.environ.get("JARVIS_VOICE") == "1":
+    # Loop vocale (wake word -> STT -> agente -> TTS): condivide la sessione,
+    # cosi' il dialogo dal microfono e quello via /ask alimentano lo stesso
+    # stato. Si attiva secondo l'hardware rilevato (vedi _voice_should_listen).
+    if _voice_should_listen():
         from .voice.loop import run_voice_loop
-        threading.Thread(target=run_voice_loop, args=(agent,), daemon=True).start()
-        print("Loop vocale attivo.")
+        threading.Thread(target=run_voice_loop, args=(agent,),
+                         kwargs={"session": session}, daemon=True).start()
+        print("Loop vocale attivo (microfono).")
+    else:
+        print("Loop microfono non attivo; assistente raggiungibile via POST /ask.")
 
     print(f"GSOI Jarvis Mini pronto (servizio). Modalita': {agent.mode().value}")
     if agent.config.ai_backend == "local":
@@ -96,6 +127,7 @@ def _run_serve(agent: JarvisMini) -> None:
     else:
         print("Cervello locale: mock (JARVIS_AI=local per il modello reale)")
     print(f"API stato: http://{DEFAULT_HOST}:{DEFAULT_PORT}/state")
+    print(f"Assistente: POST http://{DEFAULT_HOST}:{DEFAULT_PORT}/ask  {{'text': '...'}}")
     print("Motore proattivo attivo. Premi Ctrl+C per uscire.")
     try:
         while True:
