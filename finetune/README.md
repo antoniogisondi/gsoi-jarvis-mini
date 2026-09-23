@@ -68,12 +68,50 @@ ollama run gsoi                      # espone un endpoint OpenAI-compatible
 JARVIS_AI=local JARVIS_MODEL_URL=http://127.0.0.1:11434/v1 jarvis-mini serve
 ```
 
-(oppure `llama.cpp` server: `llama-server -m gguf/....gguf --host 127.0.0.1 --port 8091`)
+(oppure `llama.cpp` server: `llama-server -m gguf/....gguf --host 127.0.0.1 --port 8091 --jinja`)
+
+> `--jinja` è **necessario** con Qwen3: applica il chat template del modello.
+> Senza, il modello emette token grezzi (`<tool_call>`/`<think>`).
+
+## Prova il modello PRIMA di caricarlo (evita di spedire un GGUF rotto)
+
+Dopo l'export, servi il `.gguf` e fai due domande di controllo:
+
+```bash
+llama-server -m gguf/*.gguf --host 127.0.0.1 --port 8091 -c 4096 --jinja &
+python3 - <<'PY'
+import urllib.request, json
+def ask(q):
+    p={"messages":[{"role":"system","content":"Sei GSOI, assistente di bordo. Rispondi breve in italiano."},
+                   {"role":"user","content":q}],"max_tokens":120,
+       "chat_template_kwargs":{"enable_thinking":False}}
+    r=urllib.request.Request("http://127.0.0.1:8091/v1/chat/completions",
+        data=json.dumps(p).encode(),headers={"Content-Type":"application/json"})
+    print(q,"->",json.loads(urllib.request.urlopen(r,timeout=180).read())["choices"][0]["message"]["content"])
+ask("Chi sei?"); ask("Puoi cancellare i codici errore del motore?")
+PY
+```
+
+La risposta deve essere **pertinente e in italiano**. Se vedi un `user\n...` o
+frasi scollegate → **non caricarlo**: ri-addestra (vedi Troubleshooting).
+
+## Troubleshooting
+
+- **Il modello risponde a caso o "sputa" `user\n...`** → in `train.py` deve
+  esserci `train_on_responses_only(...)`: la loss va calcolata **solo sulle
+  risposte dell'assistente**, altrimenti il modello impara a generare anche i
+  turni `user`. Con Qwen3 (ChatML) i marcatori sono `<|im_start|>user\n` e
+  `<|im_start|>assistant\n`. È già impostato nello script.
+- **`llama-server` emette `<tool_call>`/`<think>` grezzi** → avvialo con
+  `--jinja`. Nell'OS è già così.
+- **Overfit** (ripete gli esempi) → riduci `epochs` (2–3) o alza
+  `lora.dropout` a `0.05–0.1` in `config.yaml`.
 
 ## Note
 
 - **Model-agnostic:** per provare un altro modello (es. Minerva-7B) cambi solo
   `model.name` in `config.yaml` — attento alla VRAM per i 7B.
 - Il `system_prompt` in `config.yaml` deve restare **identico** a
-  `SYSTEM_PROMPT` in `src/jarvis_mini/ai/model_client.py`.
+  `SYSTEM_PROMPT` in `src/jarvis_mini/ai/model_client.py`, così l'addestramento
+  combacia con l'inferenza in auto.
 - `outputs/` e `gguf/` sono ignorati da git (file pesanti).

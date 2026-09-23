@@ -70,6 +70,7 @@ def main() -> None:
 
     # Import pesanti solo ora: config e dataset si validano senza GPU/unsloth.
     from unsloth import FastLanguageModel
+    from unsloth.chat_templates import train_on_responses_only
     from datasets import Dataset
     from trl import SFTConfig, SFTTrainer
 
@@ -131,7 +132,18 @@ def main() -> None:
         ),
     )
 
-    print("[GSOI] Avvio training...")
+    # --- Maschera il prompt: si addestra SOLO sulle risposte dell'assistente.
+    # CRUCIALE. Senza questo, la loss copre anche i turni "system"/"user" e il
+    # modello impara a GENERARE le battute dell'utente: in inferenza sbuca un
+    # "user\n..." e la risposta va alla deriva. Con Qwen3 (ChatML) i marcatori
+    # sono <|im_start|>user e <|im_start|>assistant.
+    trainer = train_on_responses_only(
+        trainer,
+        instruction_part="<|im_start|>user\n",
+        response_part="<|im_start|>assistant\n",
+    )
+
+    print("[GSOI] Avvio training (solo risposte assistente)...")
     trainer.train()
 
     # --- Salvataggi ed export ---------------------------------------------
