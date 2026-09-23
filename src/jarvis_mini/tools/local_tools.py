@@ -6,9 +6,16 @@ memoria solo per rendere il comportamento realistico durante i test.
 """
 
 import random
+from datetime import datetime
 
 from ..intents.models import Intent, IntentMatch, Result, Source
 from .base import Tool
+
+# Nomi italiani per giorni e mesi: evitano la dipendenza dal locale di sistema
+# (l'immagine embedded potrebbe non avere it_IT installato).
+_GIORNI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+_MESI = ["", "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+         "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
 
 
 class AudioTool(Tool):
@@ -81,3 +88,32 @@ class VehicleTool(Tool):
 class BluetoothTool(Tool):
     def execute(self, match: IntentMatch) -> Result:
         return Result("Apro le impostazioni Bluetooth.", data={"screen": "bluetooth"})
+
+
+class ClockTool(Tool):
+    """Ora e data dall'orologio di bordo (deterministico, niente LLM).
+
+    `now` è iniettabile per i test; di default usa l'ora corrente.
+    """
+
+    def __init__(self, now=None):
+        self._now = now  # callable -> datetime, oppure None per datetime.now
+
+    def _current(self) -> datetime:
+        return self._now() if self._now is not None else datetime.now()
+
+    def execute(self, match: IntentMatch) -> Result:
+        d = self._current()
+        if match.intent is Intent.TIME_NOW:
+            return Result(
+                f"Sono le {d.hour:02d}:{d.minute:02d}.",
+                data={"hour": d.hour, "minute": d.minute},
+            )
+        if match.intent is Intent.DATE_TODAY:
+            giorno = _GIORNI[d.weekday()]
+            mese = _MESI[d.month]
+            return Result(
+                f"Oggi è {giorno} {d.day} {mese} {d.year}.",
+                data={"day": d.day, "month": d.month, "year": d.year},
+            )
+        return Result("Non ho l'ora disponibile.", success=False)

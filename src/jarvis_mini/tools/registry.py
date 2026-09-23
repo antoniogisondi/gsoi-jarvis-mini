@@ -7,6 +7,7 @@ from .base import Tool
 from .local_tools import (
     AudioTool,
     BluetoothTool,
+    ClockTool,
     MediaTool,
     NavigationTool,
     VehicleTool,
@@ -24,6 +25,7 @@ def build_default_registry() -> Dict[Intent, Tool]:
     navigation = NavigationTool()
     vehicle = VehicleTool()
     bluetooth = BluetoothTool()
+    clock = ClockTool()
 
     return {
         Intent.MEDIA_VOLUME_UP: audio,
@@ -36,4 +38,6 @@ def build_default_registry() -> Dict[Intent, Tool]:
         Intent.VEHICLE_RPM: vehicle,
         Intent.VEHICLE_BATTERY: vehicle,
         Intent.BLUETOOTH_OPEN: bluetooth,
+        Intent.TIME_NOW: clock,
+        Intent.DATE_TODAY: clock,
     }

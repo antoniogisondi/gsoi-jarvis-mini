@@ -61,6 +61,16 @@ _PATTERNS: Dict[Intent, List[List[str]]] = {
     Intent.BLUETOOTH_OPEN: [
         ["bluetooth"], ["connetti", "telefono"], ["accoppia", "dispositivo"],
     ],
+    # Ora e data: l'auto sa che ore sono, non serve l'LLM. NB: niente gruppo
+    # con la sola parola "ora" (comparirebbe in frasi come "apri ora la mappa").
+    Intent.TIME_NOW: [
+        ["che", "ora"], ["che", "ore"], ["ora", "sono"], ["ore", "sono"],
+        ["orario"], ["dimmi", "ora"], ["che", "ore", "sono"],
+    ],
+    Intent.DATE_TODAY: [
+        ["che", "giorno"], ["che", "data"], ["data", "oggi"],
+        ["giorno", "oggi"], ["giorno", "e"], ["oggi", "quanti"],
+    ],
 }
 
 _PUNCTUATION = "?!.,;:\"'()"

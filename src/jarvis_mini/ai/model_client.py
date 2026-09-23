@@ -20,9 +20,22 @@ from ..config import Config
 from ..intents.models import Result, Source
 from .base import LocalAI
 
-# Alcuni modelli (es. varianti "thinking" di Qwen3) possono emettere un
-# blocco di ragionamento <think>...</think>: non va letto ad alta voce.
-_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+# Alcuni modelli (es. Qwen3) possono emettere token di controllo che NON vanno
+# letti ad alta voce: il blocco di ragionamento <think>...</think> e i blocchi
+# di chiamata strumenti <tool_call>...</tool_call>. Li rimuoviamo, insieme a
+# eventuali tag di controllo isolati rimasti (es. un <tool_call> senza corpo).
+_STRIP_RE = re.compile(
+    r"<think>.*?</think>|<tool_call>.*?</tool_call>|<tool_response>.*?</tool_response>",
+    re.DOTALL,
+)
+_LONE_TAG_RE = re.compile(r"</?(?:think|tool_call|tool_response)>")
+
+
+def _clean(text: str) -> str:
+    """Toglie ragionamento e chiamate-strumento, lasciando solo la risposta."""
+    text = _STRIP_RE.sub("", text)
+    text = _LONE_TAG_RE.sub("", text)
+    return text.strip()
 
 # Persona e regole del cervello di bordo. Le risposte vengono lette via TTS
 # mentre si guida, quindi devono essere brevi. Vincolo di sicurezza: il
@@ -52,6 +65,11 @@ class LocalModelClient(LocalAI):
             "temperature": self.config.model_temperature,
             "max_tokens": self.config.model_max_tokens,
             "stream": False,
+            # Qwen3 ragiona di default: per l'assistente di bordo vogliamo
+            # risposte dirette e brevi (lette via TTS). Con llama-server avviato
+            # in modalità Jinja (--jinja) questo disattiva il blocco <think>;
+            # se il server lo ignora, ci pensa comunque _clean() a rimuoverlo.
+            "chat_template_kwargs": {"enable_thinking": False},
         }
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
@@ -66,9 +84,10 @@ class LocalModelClient(LocalAI):
                 req, timeout=self.config.model_timeout
             ) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
-            answer = body["choices"][0]["message"]["content"]
-            answer = _THINK_RE.sub("", answer).strip()
-            if not answer:
+            answer = _clean(body["choices"][0]["message"]["content"])
+            # Una "risposta" fatta solo di punteggiatura (es. il '.' rimasto da
+            # un <tool_call> vuoto) equivale a nessuna risposta.
+            if not answer or not re.search(r"[0-9A-Za-zÀ-ÿ]", answer):
                 raise ValueError("risposta vuota dal modello")
         except (
             urllib.error.URLError,
