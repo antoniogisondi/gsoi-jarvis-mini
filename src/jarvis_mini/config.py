@@ -31,7 +31,11 @@ class Config:
     ai_backend: str = "mock"
     model_url: str = "http://127.0.0.1:8091/v1"
     model_name: str = "qwen3-4b-instruct"
-    model_timeout: float = 30.0
+    # Timeout generoso: su CPU lenta (es. QEMU, ~1 token/s) una risposta un po'
+    # lunga puo' superare i 30s e verrebbe scambiata per "modello irraggiungibile".
+    # Su hardware reale (Pi/Jetson) l'inferenza e' molto piu' rapida. Regolabile
+    # con JARVIS_MODEL_TIMEOUT.
+    model_timeout: float = 90.0
     model_temperature: float = 0.5
     model_max_tokens: int = 512
 
