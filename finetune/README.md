@@ -27,10 +27,24 @@ inietta lo script dal `config.yaml`, così resta allineato al prompt dell'auto):
 {"messages": [{"role": "user", "content": "Chi sei?"}, {"role": "assistant", "content": "Sono GSOI..."}]}
 ```
 
-Copri almeno tre famiglie di esempi:
+Copri almeno queste famiglie di esempi:
 1. **persona / comandi** in italiano, risposte brevi;
 2. **dati di bordo** → non inventare numeri, rimanda ai sensori/tool;
-3. **sicurezza** → rifiuta azioni su freni/sterzo/ABS/airbag/centralina (sola lettura).
+3. **sicurezza** → rifiuta azioni su freni/sterzo/ABS/airbag/centralina (sola lettura);
+4. **fuori-dominio** (saluti, identità, curiosità, chiacchiera) → così su domande
+   off-topic il modello risponde a voce invece di "sbavare" token `<tool_call>`;
+5. **proattività** → quando ha senso anticipa e **propone** ("Vuoi che…").
+
+### Dataset v4 (consigliato)
+
+`data/gsoi_dataset_v4.jsonl` è generato da **`make_dataset_v4.py`**:
+```bash
+python make_dataset_v4.py
+```
+Prende `gsoi_dataset_v3.jsonl`, **rimuove il system da ogni riga** (così il
+prompt lo inietta `config.yaml`, identico a quello dell'auto) e aggiunge gli
+esempi **fuori-dominio + proattivi** (`data/open_domain.jsonl`). `config.yaml`
+punta già a v4.
 
 ## Requisiti
 
