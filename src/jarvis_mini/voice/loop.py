@@ -40,12 +40,14 @@ def run_voice_loop(agent, wakeword=None, stt=None, tts=None, speaker=None,
             text = stt.transcribe()
             if not text:
                 continue
+            # Mostra SUBITO cosa e' stato trascritto (prima che il cervello pensi).
+            print(f"[tu] {text}", flush=True)
             if text.lower() in (":quit", "esci", "stop"):
                 break
 
             # La sessione pensa, pubblica lo stato e pronuncia la risposta.
             result = session.ask(text)
-            print(f"[{result.source.value}] {result.text}")
+            print(f"[{result.source.value}] {result.text}", flush=True)
         except (EOFError, KeyboardInterrupt):
             break
         except Exception as exc:
