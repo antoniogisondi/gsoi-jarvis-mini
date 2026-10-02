@@ -7,21 +7,24 @@ Attivare Vosk con:
     JARVIS_STT=vosk JARVIS_VOSK_MODEL=/path/vosk-model-it
 
 Cattura audio (due backend):
-  * "arecord" (DEFAULT) — usa il comando `arecord` (alsa-utils) via subprocess.
-      Robusto: passa dal layer ALSA "plug"/PipeWire che ricampiona a 16 kHz,
-      evitando i problemi di PortAudio+PipeWire. Device ALSA opzionale con
-      JARVIS_ARECORD_DEVICE (es. "default", "plughw:0,0").
-  * "sounddevice" — stream PortAudio (richiede il pacchetto `sounddevice`).
-      Selezione device con JARVIS_AUDIO_DEVICE (indice o nome).
-    Scegli il backend con JARVIS_STT_CAPTURE=arecord|sounddevice.
+  * "arecord" (DEFAULT) — usa `arecord` (alsa-utils) via subprocess, tenendo
+      UN SOLO processo aperto per tutta la sessione: su schede HDA il device
+      che converte a 16 kHz e' spesso solo `plughw:0,0`, ed e' ESCLUSIVO —
+      aprendolo/chiudendolo a ogni frase, PipeWire lo "ruba" nel frattempo.
+      Tenendolo aperto il device resta nostro; l'audio accumulato mentre il
+      cervello elabora viene scartato (drain) prima di riascoltare.
+      Device ALSA con JARVIS_ARECORD_DEVICE (default: plughw:0,0).
+  * "sounddevice" — stream PortAudio (JARVIS_STT_CAPTURE=sounddevice,
+      device con JARVIS_AUDIO_DEVICE). Fragile con PipeWire.
 """
 
 import json
 import os
+import select
 import subprocess
 import time
 
-_CHUNK = 8000  # byte letti per volta (~0.25 s a 16 kHz, 16-bit, mono)
+_CHUNK = 4000  # byte letti per volta (~0.12 s a 16 kHz, 16-bit, mono)
 
 
 class STT:
@@ -42,8 +45,8 @@ class VoskSTT(STT):
         self.model_path = model_path
         self.samplerate = samplerate
         self._model = None
-        self._warned = False  # stampa l'errore una sola volta
-        self._capture = os.environ.get("JARVIS_STT_CAPTURE", "arecord")
+        self._proc = None       # processo arecord persistente
+        self._warned = False
 
     def _ensure_model(self):
         if self._model is None:
@@ -56,50 +59,78 @@ class VoskSTT(STT):
             if hint:
                 print(hint)
             self._warned = True
-        time.sleep(3)  # evita il loop a raffica se il mic non si apre
+        time.sleep(3)
         return ""
 
     def transcribe(self) -> str:
-        if self._capture == "sounddevice":
+        if os.environ.get("JARVIS_STT_CAPTURE") == "sounddevice":
             return self._via_sounddevice()
         return self._via_arecord()
 
-    # --- Backend robusto: arecord (alsa-utils) ------------------------------
+    # --- Backend robusto: UN arecord persistente ----------------------------
+    def _start_arecord(self):
+        dev = os.environ.get("JARVIS_ARECORD_DEVICE", "plughw:0,0")
+        cmd = ["arecord", "-q", "-f", "S16_LE",
+               "-r", str(self.samplerate), "-c", "1", "-t", "raw", "-D", dev]
+        self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                      stderr=subprocess.DEVNULL)
+
+    def _drain(self, fd):
+        """Scarta l'audio bufferizzato (es. accumulato durante l'elaborazione)."""
+        while select.select([fd], [], [], 0)[0]:
+            if not os.read(fd, 65536):
+                break
+
     def _via_arecord(self) -> str:
         try:
             from vosk import KaldiRecognizer
             self._ensure_model()
-            cmd = ["arecord", "-q", "-f", "S16_LE",
-                   "-r", str(self.samplerate), "-c", "1", "-t", "raw"]
-            dev = os.environ.get("JARVIS_ARECORD_DEVICE")
-            if dev:
-                cmd += ["-D", dev]
 
+            if self._proc is None or self._proc.poll() is not None:
+                self._start_arecord()
+                time.sleep(0.3)  # lascia aprire il device
+                if self._proc.poll() is not None:
+                    return self._err("arecord non si avvia",
+                                     "[STT] device occupato? Prova "
+                                     "JARVIS_ARECORD_DEVICE=plughw:0,0. Riprovo ogni 3s...")
+
+            fd = self._proc.stdout.fileno()
+            self._drain(fd)                      # butta il backlog
             rec = KaldiRecognizer(self._model, self.samplerate)
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                    stderr=subprocess.DEVNULL)
             self._warned = False
-            try:
-                while True:
-                    data = proc.stdout.read(_CHUNK)
-                    if not data:
-                        return ""  # arecord terminato
-                    if rec.AcceptWaveform(data):
-                        text = json.loads(rec.Result()).get("text", "").strip()
-                        if text:  # ignora i silenzi, torna solo con parole
-                            return text
-            finally:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=1)
-                except Exception:
-                    proc.kill()
+            while True:
+                r = select.select([fd], [], [], 1.0)[0]
+                if not r:
+                    continue
+                data = os.read(fd, _CHUNK)
+                if not data:                     # arecord e' morto -> riavvia
+                    self._proc = None
+                    return ""
+                if rec.AcceptWaveform(data):
+                    text = json.loads(rec.Result()).get("text", "").strip()
+                    if text:                     # ignora i silenzi
+                        return text
         except FileNotFoundError:
             return self._err("'arecord' non trovato",
                              "[STT] installa alsa-utils: sudo apt install alsa-utils")
         except Exception as exc:
-            return self._err(exc, "[STT] cattura audio fallita (arecord). "
-                                  "Prova JARVIS_ARECORD_DEVICE=default. Riprovo ogni 3s...")
+            self._proc = None
+            return self._err(exc, "[STT] cattura audio fallita. Riprovo ogni 3s...")
+
+    def close(self):
+        if self._proc is not None:
+            try:
+                self._proc.terminate()
+                self._proc.wait(timeout=1)
+            except Exception:
+                try:
+                    self._proc.kill()
+                except Exception:
+                    pass
+            self._proc = None
+
+    def __del__(self):
+        self.close()
 
     # --- Backend alternativo: sounddevice (PortAudio) -----------------------
     def _via_sounddevice(self) -> str:
@@ -131,8 +162,7 @@ class VoskSTT(STT):
                         return json.loads(rec.Result()).get("text", "").strip()
         except Exception as exc:
             return self._err(exc, "[STT] PortAudio non apre il mic. "
-                                  "Prova il backend arecord (JARVIS_STT_CAPTURE=arecord). "
-                                  "Riprovo ogni 3s...")
+                                  "Prova il backend arecord. Riprovo ogni 3s...")
 
 
 def make_stt() -> STT:
