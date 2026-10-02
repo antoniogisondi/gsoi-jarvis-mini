@@ -1,11 +1,15 @@
 """Sintesi vocale (testo -> voce).
 
-Due implementazioni:
-  * MockTTS  — stampa soltanto (default, nessuna dipendenza).
-  * PiperTTS — voce reale offline con Piper (binario + modello .onnx).
+Implementazioni:
+  * MockTTS   — stampa soltanto (default, nessuna dipendenza).
+  * EspeakTTS — voce offline immediata via espeak-ng (robotica, nessun modello).
+  * PiperTTS  — voce reale naturale offline con Piper (binario + modello .onnx).
 
-La factory sceglie in base alle variabili d'ambiente; se Piper non e'
-disponibile ripiega sul mock, cosi' l'app funziona sempre.
+La factory sceglie in base alle variabili d'ambiente; se il motore scelto non
+e' disponibile ripiega sul mock, cosi' l'app funziona sempre.
+
+  JARVIS_TTS=espeak   [JARVIS_ESPEAK_VOICE=it]  [JARVIS_ESPEAK_SPEED=160]
+  JARVIS_TTS=piper     JARVIS_PIPER_MODEL=/path/voice.onnx
 """
 
 import os
@@ -22,6 +26,29 @@ class TTS:
 class MockTTS(TTS):
     def say(self, text: str) -> None:
         print(f"[TTS] {text}")
+
+
+class EspeakTTS(TTS):
+    """Voce offline immediata via espeak-ng (nessun modello da scaricare).
+
+    Voce robotica ma funziona subito; in italiano con -v it. Attivare con:
+        JARVIS_TTS=espeak  [JARVIS_ESPEAK_VOICE=it]  [JARVIS_ESPEAK_SPEED=160]
+    """
+
+    def __init__(self, binary: str = "espeak-ng", voice: str = "it", speed=None):
+        self.binary = binary
+        self.voice = voice
+        self.speed = speed
+
+    def say(self, text: str) -> None:
+        try:
+            cmd = [self.binary, "-v", self.voice]
+            if self.speed:
+                cmd += ["-s", str(self.speed)]
+            cmd += ["--", text]
+            subprocess.run(cmd, check=False)
+        except Exception as exc:  # non deve mai far cadere l'agente
+            print(f"[TTS:fallback] {text}  ({exc})")
 
 
 class PiperTTS(TTS):
@@ -59,7 +86,16 @@ class PiperTTS(TTS):
 
 
 def make_tts() -> TTS:
-    model = os.environ.get("JARVIS_PIPER_MODEL")
-    if os.environ.get("JARVIS_TTS") == "piper" and model and shutil.which("piper"):
-        return PiperTTS(model)
+    kind = os.environ.get("JARVIS_TTS")
+    if kind == "piper":
+        model = os.environ.get("JARVIS_PIPER_MODEL")
+        if model and shutil.which("piper"):
+            return PiperTTS(model)
+    if kind == "espeak":
+        binary = shutil.which("espeak-ng") or shutil.which("espeak")
+        if binary:
+            speed = os.environ.get("JARVIS_ESPEAK_SPEED")
+            return EspeakTTS(binary=binary,
+                             voice=os.environ.get("JARVIS_ESPEAK_VOICE", "it"),
+                             speed=int(speed) if speed else None)
     return MockTTS()
